@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ESG RAG Analyst</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Source+Serif+4:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand-block">
+          <div class="brand-mark">ESG</div>
+          <div>
+            <p class="kicker">Retrieval + verification + reporting</p>
+            <h1>RAG Analyst Workspace</h1>
+          </div>
+        </div>
+        <div class="topbar-status">
+          <div>
+            <span class="metric-label">Vector backend</span>
+            <strong id="metricBackend">-</strong>
+          </div>
+          <div>
+            <span class="metric-label">Embedding</span>
+            <strong id="metricEmbedding">-</strong>
+          </div>
+          <div>
+            <span class="metric-label">LLM mode</span>
+            <strong id="metricModel">-</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="hero-band">
+          <div class="hero-copy">
+            <span class="eyebrow">Operating Surface</span>
+            <h2>Build an ESG evidence base, inspect retrieval, and turn it into a traceable report.</h2>
+            <p id="systemSummary">Loading system profile, corpus metrics, and model availability.</p>
+          </div>
+          <div class="hero-stats">
+            <div class="hero-stat">
+              <span class="metric-label">Indexed chunks</span>
+              <strong id="metricChunks">-</strong>
+            </div>
+            <div class="hero-stat">
+              <span class="metric-label">Indexed sources</span>
+              <strong id="metricSources">-</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="workspace-grid">
+          <!-- ── Sidebar: Knowledge Bases ── -->
+          <aside class="rail">
+            <div class="rail-section">
+              <span class="eyebrow">Knowledge Bases</span>
+              <h3>Manage your knowledge bases</h3>
+              <p class="section-copy">Create knowledge bases and upload ESG documents for indexing and analysis.</p>
+              <div class="kb-create-form">
+                <input id="kbNameInput" type="text" placeholder="Knowledge base name" />
+                <input id="kbDescInput" type="text" placeholder="Description (optional)" />
+                <button id="kbCreateBtn" class="primary-btn">Create knowledge base</button>
+              </div>
+              <div id="kbList" class="kb-list"></div>
+            </div>
+
+            <div class="rail-section" id="kbDocSection" style="display:none">
+              <div class="kb-doc-header">
+                <div>
+                  <span class="eyebrow">Documents</span>
+                  <h3 id="kbDocTitle">-</h3>
+                  <p class="detail-copy" id="kbDocDesc"></p>
+                </div>
+              </div>
+              <div class="kb-actions-row">
+                <label class="file-upload-label" for="kbFileInput">
+                  Choose files
+                  <input id="kbFileInput" type="file" multiple accept=".pdf,.txt,.md,.json,.docx" />
+                </label>
+                <button id="kbUploadBtn" class="primary-btn compact">Upload & Index</button>
+                <button id="kbIndexBtn" class="secondary-btn compact">Re-index</button>
+              </div>
+              <pre id="kbOutput" class="output compact-output"></pre>
+              <div id="kbDocList" class="kb-doc-list"></div>
+            </div>
+          </aside>
+
+          <!-- ── Main: Query + Analysis ── -->
+          <section class="main-lane">
+            <div class="pane">
+              <div class="pane-head">
+                <div>
+                  <span class="eyebrow">Retrieval</span>
+                  <h3>Search indexed evidence</h3>
+                </div>
+              </div>
+              <label class="field-label">Search in knowledge bases</label>
+              <div id="queryKbSelect" class="kb-select-row"></div>
+              <label class="field-label" for="queryInput">Question</label>
+              <textarea
+                id="queryInput"
+                rows="4"
+                placeholder="What climate, social, and governance disclosures are available?"
+              ></textarea>
+              <div class="btn-row">
+                <button id="queryBtn" class="primary-btn">Run retrieval</button>
+                <button id="queryClearBtn" class="secondary-btn" style="display:none">Clear results</button>
+              </div>
+              <div id="queryResults" class="output-scroll stack"></div>
+            </div>
+
+            <div class="pane">
+              <div class="pane-head">
+                <div>
+                  <span class="eyebrow">Analysis</span>
+                  <h3>Generate structured ESG output</h3>
+                </div>
+              </div>
+              <div class="form-row">
+                <div>
+                  <label class="field-label" for="companyInput">Company</label>
+                  <input id="companyInput" type="text" value="Company A" />
+                </div>
+                <div>
+                  <label class="field-label" for="frameworkInput">Frameworks</label>
+                  <input id="frameworkInput" type="text" value="GRI,SASB,TCFD,CSRD" />
+                </div>
+              </div>
+              <label class="field-label">Search in knowledge bases</label>
+              <div id="analyzeKbSelect" class="kb-select-row"></div>
+              <label class="field-label" for="analysisInput">Analysis request</label>
+              <textarea
+                id="analysisInput"
+                rows="4"
+                placeholder="Generate a structured ESG analysis based on indexed evidence."
+              >Generate a structured ESG analysis based on indexed evidence.</textarea>
+              <div class="btn-row">
+                <button id="analyzeBtn" class="primary-btn">Generate report</button>
+                <button id="analyzeClearBtn" class="secondary-btn" style="display:none">Clear report</button>
+              </div>
+              <div id="analysisOutput" class="output-scroll stack"></div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <!-- Confirm dialog -->
+    <dialog id="confirmDialog" class="confirm-dialog">
+      <div class="confirm-body">
+        <h3 id="confirmTitle">Confirm</h3>
+        <p id="confirmMessage">Are you sure?</p>
+        <div class="confirm-actions">
+          <button id="confirmCancel" class="secondary-btn compact">Cancel</button>
+          <button id="confirmOk" class="danger-btn compact">Confirm</button>
+        </div>
+      </div>
+    </dialog>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+services:
+  esg-rag:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        EMBEDDING_MODEL: ${LOCAL_EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+    container_name: esg-rag-agent
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8001}:8001"
+    volumes:
+      - esg-storage:/app/storage
+      - esg-data:/app/data
+    env_file:
+      - .env
+    environment:
+      - PORT=8001
+      - WORKERS=${WORKERS:-1}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - KB_STORAGE_DIR=/app/storage/kbs
+      - INDEX_DIR=/app/storage/index
+      - DATA_DIR=/app/data
+      - UPLOAD_DIR=/app/data/uploads
+
+volumes:
+  esg-storage:
+    driver: local
+  esg-data:
+    driver: local
