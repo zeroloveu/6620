@@ -37,6 +37,16 @@ annual reports, benchmark framework documents, PDFs, and external sentiment data
 5. Review the report together with compliance alignment, confidence scores, and agent trace.
 
 ## Quick start
+### 0.By docker
+```bash
+# 1. 确保 .env 已配置好（尤其是 OPENAI_API_KEY）
+# 2. 一键构建并启动
+docker compose up -d --build
+# 3. 查看日志
+docker compose logs -f
+# 4. 访问
+# http://localhost:8001
+```
 
 ### 1. Install dependencies
 
@@ -56,14 +66,12 @@ pip install -e .[vectordb]
 copy .env.example .env
 ```
 
-Example configuration:
+Configuration:
 
 ```env
-OPENAI_API_KEY=your_key
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_CHAT_MODEL=gpt-4.1-mini
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_BACKEND=local
+OPENAI_API_KEY=sk-3328607470414d8f8c092d5ae13dc202
+OPENAI_BASE_URL=https://api.deepseek.com
+OPENAI_CHAT_MODEL=deepseek-reasoner
 LOCAL_EMBEDDING_MODEL=all-MiniLM-L6-v2
 DATA_DIR=./data
 INDEX_DIR=./storage/index
@@ -72,6 +80,10 @@ VECTOR_BACKEND=simple
 CHROMA_COLLECTION=esg_documents
 MILVUS_URI=./storage/milvus_esg.db
 MILVUS_COLLECTION=esg_documents
+CHUNK_SIZE=900
+CHUNK_OVERLAP=150
+TOP_K=6
+MAX_CONTEXT_CHUNKS=8
 ```
 
 Without an API key, the system still works in local fallback mode:
