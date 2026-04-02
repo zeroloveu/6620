@@ -57,6 +57,18 @@ class SimpleVectorStore:
             for index in top_indices
         ]
 
+    def clear(self) -> None:
+        """Remove all indexed data so stale entries don't survive a re-index."""
+        self.vectors = None
+        self.chunks = []
+        if self.matrix_path.exists():
+            self.matrix_path.unlink()
+        if self.meta_path.exists():
+            self.meta_path.unlink()
+        state_path = self.persist_dir / "state.joblib"
+        if state_path.exists():
+            state_path.unlink()
+
     def _load(self) -> None:
         if self.matrix_path.exists() and self.meta_path.exists():
             self.vectors = np.load(self.matrix_path)

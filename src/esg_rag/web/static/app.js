@@ -200,10 +200,19 @@ function renderDocList(docs) {
       const docName = btn.dataset.docName;
       const confirmed = await showConfirm(
         "Delete document",
-        `Are you sure you want to delete "${docName}"?`,
+        `Are you sure you want to delete "${docName}"? The index will be rebuilt automatically.`,
       );
       if (!confirmed) return;
-      await request(`/kb/${selectedKbId}/documents/${docId}`, { method: "DELETE" });
+      const output = document.getElementById("kbOutput");
+      output.textContent = `Deleting "${docName}" and rebuilding index...`;
+      btn.disabled = true;
+      try {
+        const data = await request(`/kb/${selectedKbId}/documents/${docId}`, { method: "DELETE" });
+        const idx = data?.index || {};
+        output.textContent = `Deleted "${docName}". Index rebuilt: ${idx.files_indexed ?? 0} files → ${idx.chunks_indexed ?? 0} chunks.`;
+      } catch (error) {
+        output.textContent = `Error: ${error.message}`;
+      }
       await selectKb(selectedKbId);
       await loadKbList();
     });

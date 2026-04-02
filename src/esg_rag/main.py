@@ -217,10 +217,22 @@ def update_kb_document(kb_id: str, doc_id: str, request: DocUpdateRequest) -> di
     return doc
 
 
-@app.delete("/kb/{kb_id}/documents/{doc_id}", status_code=204)
-def delete_kb_document(kb_id: str, doc_id: str) -> None:
-    if not get_kb_manager().delete_document(kb_id, doc_id):
+@app.delete("/kb/{kb_id}/documents/{doc_id}")
+def delete_kb_document(kb_id: str, doc_id: str) -> dict:
+    mgr = get_kb_manager()
+    if not mgr.delete_document(kb_id, doc_id):
         raise HTTPException(status_code=404, detail="Document not found")
+    files_indexed, chunks_indexed, sources = get_pipeline().index_kb(
+        mgr.files_dir(kb_id), mgr.index_dir(kb_id)
+    )
+    return {
+        "deleted": doc_id,
+        "index": {
+            "files_indexed": files_indexed,
+            "chunks_indexed": chunks_indexed,
+            "sources": sources,
+        },
+    }
 
 
 @app.post("/kb/{kb_id}/index", response_model=KBIndexResponse)

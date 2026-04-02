@@ -140,12 +140,14 @@ class ESGAnalysisPipeline:
         documents = loader.load_directory(files_dir)
         chunker = ESGChunker(self.settings.chunk_size, self.settings.chunk_overlap)
         chunks = chunker.chunk_documents(documents)
+        store = SimpleVectorStore(index_dir)
         if chunks:
             embeddings = self.retriever.embedding_provider.embed_documents(
                 [c.text for c in chunks]
             )
-            store = SimpleVectorStore(index_dir)
             store.index(chunks, embeddings)
+        else:
+            store.clear()
         sources = sorted({str(doc.metadata.get("source", "unknown")) for doc in documents})
         return len(documents), len(chunks), sources
 
