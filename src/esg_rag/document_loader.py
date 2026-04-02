@@ -10,6 +10,8 @@ from esg_rag.models import Document
 
 logger = logging.getLogger(__name__)
 
+_MIN_PAGE_CHARS = 60
+
 
 class DocumentLoader:
     supported_extensions = {".txt", ".md", ".pdf", ".json", ".docx"}
@@ -79,16 +81,47 @@ class DocumentLoader:
         except Exception:
             logger.exception("Failed to open PDF: %s", path.name)
             return []
+
+        base = self._base_metadata(path)
+        total_pages = len(reader.pages)
         documents: list[Document] = []
+        carry = ""
+        carry_start: int | None = None
+
         for page_number, page in enumerate(reader.pages, start=1):
-            text = page.extract_text() or ""
-            if text.strip():
-                documents.append(
-                    Document(
-                        text=text,
-                        metadata={**self._base_metadata(path), "page": page_number},
-                    )
-                )
+            text = (page.extract_text() or "").strip()
+            if not text:
+                continue
+
+            if len(text) < _MIN_PAGE_CHARS:
+                if carry_start is None:
+                    carry_start = page_number
+                carry += ("\n" if carry else "") + text
+                continue
+
+            if carry:
+                text = carry + "\n" + text
+                start_page = carry_start or page_number
+                carry = ""
+                carry_start = None
+            else:
+                start_page = page_number
+
+            documents.append(Document(
+                text=text,
+                metadata={**base, "page": start_page, "total_pages": total_pages},
+            ))
+
+        if carry:
+            if documents:
+                last = documents[-1]
+                last.text += "\n" + carry
+            else:
+                documents.append(Document(
+                    text=carry,
+                    metadata={**base, "page": carry_start or 1, "total_pages": total_pages},
+                ))
+
         return documents
 
     def _load_docx(self, path: Path) -> list[Document]:
@@ -105,13 +138,30 @@ class DocumentLoader:
             logger.exception("Failed to open docx: %s", path.name)
             return []
 
-        paragraphs: list[str] = []
+        base = self._base_metadata(path)
+        sections: list[tuple[str | None, list[str]]] = []
+        current_heading: str | None = None
+        current_paras: list[str] = []
+
         for element in doc.element.body:
             tag = element.tag.split("}")[-1]
+
             if tag == "p":
-                text = element.text or ""
-                if text.strip():
-                    paragraphs.append(text.strip())
+                from docx.text.paragraph import Paragraph
+                para = Paragraph(element, doc)
+                text = para.text.strip()
+                if not text:
+                    continue
+
+                style_name = (para.style.name or "").lower() if para.style else ""
+                if "heading" in style_name or "title" in style_name:
+                    if current_paras:
+                        sections.append((current_heading, current_paras))
+                    current_heading = text
+                    current_paras = []
+                else:
+                    current_paras.append(text)
+
             elif tag == "tbl":
                 table = Table(element, doc)
                 rows: list[str] = []
@@ -119,24 +169,29 @@ class DocumentLoader:
                     cells = [cell.text.strip() for cell in row.cells]
                     rows.append(" | ".join(cells))
                 if rows:
-                    paragraphs.append("\n".join(rows))
+                    current_paras.append("\n".join(rows))
 
-        if not paragraphs:
+        if current_paras:
+            sections.append((current_heading, current_paras))
+
+        if not sections:
             return []
 
-        chunk_size = 20
         documents: list[Document] = []
-        for i in range(0, len(paragraphs), chunk_size):
-            batch = paragraphs[i : i + chunk_size]
-            text = "\n\n".join(batch)
-            if text.strip():
-                documents.append(
-                    Document(
-                        text=text,
-                        metadata={
-                            **self._base_metadata(path),
-                            "section_start": i,
-                        },
-                    )
-                )
+        chunk_size = 15
+
+        for heading, paras in sections:
+            for i in range(0, len(paras), chunk_size):
+                batch = paras[i : i + chunk_size]
+                text_parts = []
+                if heading:
+                    text_parts.append(f"## {heading}")
+                text_parts.extend(batch)
+                text = "\n\n".join(text_parts)
+                if text.strip():
+                    meta = {**base, "section_start": i}
+                    if heading:
+                        meta["section_heading"] = heading
+                    documents.append(Document(text=text, metadata=meta))
+
         return documents

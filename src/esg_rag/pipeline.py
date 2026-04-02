@@ -40,8 +40,11 @@ class Retriever:
         return len(documents), len(chunks), sources
 
     def search(self, query: str, top_k: int | None = None) -> list[SearchResult]:
+        from esg_rag.query_expansion import enrich_query
+
         top_k = top_k or self.settings.top_k
-        query_vector = self.embedding_provider.embed_query(query)
+        enriched = enrich_query(query)
+        query_vector = self.embedding_provider.embed_query(enriched)
         candidate_k = max(top_k, top_k * self.settings.retrieval_candidate_multiplier)
         results = self.vector_store.search(query_vector, top_k=candidate_k)
         return self._rerank_results(query, results, top_k=top_k)
@@ -67,7 +70,7 @@ class Retriever:
         return ranked[:top_k]
 
     def _tokenize(self, text: str) -> set[str]:
-        return {token for token in re.findall(r"[a-zA-Z0-9][a-zA-Z0-9-]{2,}", text.lower())}
+        return set(re.findall(r"[a-zA-Z0-9\u4e00-\u9fff][a-zA-Z0-9\u4e00-\u9fff-]{1,}", text.lower()))
 
     def _keyword_overlap(self, query_tokens: set[str], result_tokens: set[str]) -> float:
         if not query_tokens:
@@ -187,7 +190,9 @@ class ESGAnalysisPipeline:
 
 
 class _KBRetriever:
-    """Searches across one or more knowledge-base indexes."""
+    """Searches across one or more knowledge-base indexes with reranking."""
+
+    _YEAR_RE = re.compile(r"(20\d{2})")
 
     def __init__(self, embedding_provider, index_dirs: list[Path], settings: Settings) -> None:
         self.embedding_provider = embedding_provider
@@ -195,16 +200,57 @@ class _KBRetriever:
         self.settings = settings
 
     def search(self, query: str, top_k: int | None = None) -> list[SearchResult]:
+        from esg_rag.query_expansion import enrich_query
+
         top_k = top_k or self.settings.top_k
-        query_vector = self.embedding_provider.embed_query(query)
+        candidate_k = max(top_k, top_k * self.settings.retrieval_candidate_multiplier)
+
+        enriched = enrich_query(query)
+        query_vector = self.embedding_provider.embed_query(enriched)
+
         all_results: list[SearchResult] = []
         for store in self.stores:
-            all_results.extend(store.search(query_vector, top_k=top_k))
-        all_results.sort(key=lambda r: r.score, reverse=True)
-        seen: set[str] = set()
-        deduped: list[SearchResult] = []
-        for r in all_results:
-            if r.chunk_id not in seen:
-                seen.add(r.chunk_id)
-                deduped.append(r)
-        return deduped[:top_k]
+            all_results.extend(store.search(query_vector, top_k=candidate_k))
+
+        return self._rerank(query, all_results, top_k)
+
+    def _rerank(self, query: str, results: list[SearchResult], top_k: int) -> list[SearchResult]:
+        query_tokens = self._tokenize(query)
+        deduped: dict[str, SearchResult] = {}
+
+        for r in results:
+            norm_text = re.sub(r"\s+", " ", r.text).strip().lower()
+            kw_overlap = self._keyword_overlap(query_tokens, self._tokenize(r.text))
+            year_boost = self._temporal_boost(r.metadata)
+            score = float(r.score) + (kw_overlap * 0.15) + year_boost
+
+            boosted = SearchResult(
+                chunk_id=r.chunk_id,
+                score=round(score, 4),
+                text=r.text,
+                metadata=r.metadata,
+            )
+            existing = deduped.get(norm_text)
+            if existing is None or boosted.score > existing.score:
+                deduped[norm_text] = boosted
+
+        ranked = sorted(deduped.values(), key=lambda x: x.score, reverse=True)
+        return ranked[:top_k]
+
+    def _temporal_boost(self, metadata: dict) -> float:
+        name = metadata.get("source_name", "")
+        match = self._YEAR_RE.search(name)
+        if not match:
+            return 0.0
+        age = max(0, 2026 - int(match.group(1)))
+        return round(-0.01 * age, 4)
+
+    @staticmethod
+    def _tokenize(text: str) -> set[str]:
+        return set(re.findall(r"[a-zA-Z0-9\u4e00-\u9fff][a-zA-Z0-9\u4e00-\u9fff-]{1,}", text.lower()))
+
+    @staticmethod
+    def _keyword_overlap(query_tokens: set[str], result_tokens: set[str]) -> float:
+        if not query_tokens:
+            return 0.0
+        return len(query_tokens & result_tokens) / len(query_tokens)

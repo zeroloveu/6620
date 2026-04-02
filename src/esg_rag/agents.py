@@ -119,8 +119,17 @@ class PlannerAgent:
 
 class RetrievalAgent:
     def run(self, queries: list[str], retriever, top_k: int) -> list[SearchResult]:
+        from esg_rag.query_expansion import expand_query
+
+        all_queries: list[str] = []
+        for q in queries:
+            all_queries.append(q)
+            for variant in expand_query(q, max_variants=2):
+                if variant != q and variant not in all_queries:
+                    all_queries.append(variant)
+
         collected: dict[str, SearchResult] = {}
-        for query in queries:
+        for query in all_queries:
             for result in retriever.search(query, top_k=top_k):
                 existing = collected.get(result.chunk_id)
                 if existing is None or result.score > existing.score:
